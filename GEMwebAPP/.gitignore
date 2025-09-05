@@ -1,0 +1,18 @@
+Firebase
+serviceAccountKey.json
+Python virtual environment
+/venv
+/.venv
+/env/
+/venv.bak/
+/ENV/
+
+Python cache
+pycache/
+*.pyc
+*.pyo
+*.pyd
+
+Editor directories and files
+.idea/
+.vscode/
