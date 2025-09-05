@@ -1,9 +1,6 @@
 Dependencies
 /node_modules
 
-Firebase config
-/src/firebase/config.js
-
 Build files
 /dist
 /.vite
