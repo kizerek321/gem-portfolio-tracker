@@ -37,7 +37,7 @@ const SignalCard = ({ data }) => {
     <div className={`w-full max-w-md mx-auto rounded-xl shadow-lg border ${borderColor} ${cardBgColor} p-6 sm:p-8 transition-all duration-300`}>
       <div className="text-center">
         <p className="text-sm font-medium text-gray-500">Current GEM Signal</p>
-        <h1 className={`text-5xl sm:text-6xl font-bold mt-2 ${textColor}`}>{data.signal}</h1>
+        <h1 className={`text-5xl sm:text-6xl font-bold mt-2 ${textColor}`}>{data.recommended_asset}</h1>
         <p className="mt-1 text-gray-600">{isRiskOn ? "Invest in Global Equities" : "Retreat to Safety (Bonds)"}</p>
         <p>Asset to invest to based on GEM strategy: {data.recommended_asset}</p>
       </div>

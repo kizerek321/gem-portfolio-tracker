@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '/src/firebase/config.js'; // Import auth as well
+import { db, auth } from '/src/firebase/config.js';
 import { collection, addDoc, query, onSnapshot } from "firebase/firestore";
 
-// A small helper component for the calculating state
+
 const CalculatingSpinner = () => (
   <td colSpan="5" className="text-center p-4">
     <div className="flex justify-center items-center text-gray-500">
@@ -25,7 +25,10 @@ export const Dashboard = ({ user }) => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [amount, setAmount] = useState('');
   const [asset, setAsset] = useState('VT');
-
+  // Date validation state
+  const [isValidatingDate, setIsValidatingDate] = useState(false);
+  const [dateValidationMessage, setDateValidationMessage] = useState('');
+  const [isDateValid, setIsDateValid] = useState(false);
   // EFFECT 1: Fetch raw transactions from Firestore
   useEffect(() => {
     if (!user) return;
@@ -80,6 +83,33 @@ export const Dashboard = ({ user }) => {
     fetchCalculations();
   }, [portfolio, user]); // Rerun this effect when the raw portfolio or user changes
 
+  useEffect(() => {
+    const validateDate = async () => {
+      setIsValidatingDate(true);
+      setDateValidationMessage('');
+      setIsDateValid(false); // Assume invalid until proven otherwise
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/validate-date', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset, date })
+        });
+        const data = await response.json();
+        if (data.isValid) {
+          setIsDateValid(true);
+        } else {
+          setDateValidationMessage('Market was closed on this date. Please pick another.');
+        }
+      } catch (error) {
+        console.error("Date validation error:", error);
+        setDateValidationMessage('Could not validate date.');
+      } finally {
+        setIsValidatingDate(false);
+      }
+    };
+    validateDate();
+  }, [date, asset]); // Rerun whenever the date or asset in the form changes
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!amount || Number(amount) <= 0) {
@@ -98,15 +128,19 @@ export const Dashboard = ({ user }) => {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-      {/* Column 1: Add Transaction Form (No changes here) */}
-      <div className="lg:col-span-1">
+    <div className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-5 gap-8">
+      {/* Column 1: Add Transaction Form */}
+      <div className="lg:col-span-2">
         <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
           <h3 className="text-xl font-bold text-gray-800 mb-4">Add Transaction</h3>
           <form onSubmit={handleSubmit}>
              <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="date">Date</label>
-              <input type="date" id="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
+              <input 
+                type="date" id="date" value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required
+              />
             </div>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="amount">Amount (USD)</label>
@@ -119,13 +153,22 @@ export const Dashboard = ({ user }) => {
                 <option value="BND">Bonds (BND)</option>
               </select>
             </div>
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Add to Portfolio</button>
+            <div className="mt-4">
+              {dateValidationMessage && <p className="text-red-500 text-xs italic mb-2">{dateValidationMessage}</p>}
+              <button
+                type="submit"
+                disabled={!isDateValid || isValidatingDate}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {isValidatingDate ? 'Validating Date...' : 'Add to Portfolio'}
+              </button>
+            </div>
           </form>
         </div>
       </div>
 
-      {/* Column 2: Portfolio Display (Updated with live data) */}
-      <div className="lg:col-span-2">
+      {/* Column 2: Portfolio Display*/}
+      <div className="lg:col-span-3">
         <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
           <h3 className="text-xl font-bold text-gray-800 mb-4">Your Portfolio</h3>
           <div className="overflow-x-auto">
@@ -141,19 +184,25 @@ export const Dashboard = ({ user }) => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {calculating && <CalculatingSpinner />}
-                  {!calculating && enrichedPortfolio.map(tx => {
-                    const profitLoss = tx.profitLoss || 0;
+                  {/* --- FIX IS HERE --- */}
+                  {/* We now map over the base portfolio and LOOK FOR enriched data */}
+                  {portfolio.map(tx => {
+                    const enrichedTx = enrichedPortfolio.find(etx => etx.id === tx.id);
+                    const currentValue = enrichedTx ? parseFloat(enrichedTx.currentValue) : NaN;
+                    const profitLoss = enrichedTx ? parseFloat(enrichedTx.profitLoss) : NaN;
                     const isProfit = profitLoss >= 0;
                     const profitColor = isProfit ? 'text-green-600' : 'text-red-600';
+                    
                     return (
                       <tr key={tx.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{tx.date}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{tx.asset}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${tx.amount.toFixed(2)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${tx.currentValue ? tx.currentValue.toFixed(2) : '...'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${Number(tx.amount).toFixed(2)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {calculating || isNaN(currentValue) ? <CalculatingSpinner /> : `$${currentValue.toFixed(2)}`}
+                        </td>
                         <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${profitColor}`}>
-                          {isProfit ? '+' : ''}${profitLoss.toFixed(2)}
+                          {calculating || isNaN(profitLoss) ? '' : `${isProfit ? '+' : ''}$${profitLoss.toFixed(2)}`}
                         </td>
                       </tr>
                     );

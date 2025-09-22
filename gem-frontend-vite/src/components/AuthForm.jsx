@@ -25,7 +25,6 @@ export const AuthForm = () => {
       }
       // No need to set user state here, the onAuthStateChanged listener in App.jsx will handle it.
     } catch (err) {
-      // Provide a more user-friendly error message
       if (err.code === 'auth/wrong-password') {
         setError('Incorrect password. Please try again.');
       } else if (err.code === 'auth/user-not-found') {

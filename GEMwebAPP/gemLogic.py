@@ -27,7 +27,7 @@ def get_gem_signal():
         # 1. Define the date range: today and 12 months ago.
         # We actually need ~13 months of data to ensure we get a valid price for the start date.
         end_date = datetime.now()
-        start_date = end_date - relativedelta(months=12)
+        start_date = end_date - relativedelta(months=13)
 
         # 2. Fetch historical data for the risk-on asset.
         # We only need the data for VT to calculate the signal.
@@ -43,9 +43,8 @@ def get_gem_signal():
         # With auto_adjust=True, 'Close' is the adjusted closing price.
         price_today = float(vt_data['Close'].iloc[-1])
         date_today = vt_data.index[-1].strftime('%Y-%m-%d')
-        # Find the price from 12 months ago
-        date_12_months_ago = end_date - relativedelta(months=12)
         # Find the closest trading day in the past to our target 12-month-ago date
+        date_12_months_ago = end_date - relativedelta(months=12)
         past_date_index = vt_data.index.get_indexer([date_12_months_ago], method='pad')[0]
         price_12_months_ago = float(vt_data['Close'].iloc[past_date_index])
         date_12_months_ago_actual = vt_data.index[past_date_index].strftime('%Y-%m-%d')
@@ -94,17 +93,20 @@ def calculate_portfolio_performance(transactions: list):
         for tx in transactions:
             asset = tx['asset']
             investment_date = tx['date']
+            investment_date_str = tx['date']
+            start_date = datetime.strptime(investment_date_str, '%Y-%m-%d')
+            end_date = start_date + timedelta(days=5)
             amount_invested = tx['amount']
 
             # Fetch historical data for the specific asset around the investment date
-            hist_data = yf.download(asset, start=investment_date,
-                                    end=(datetime.strptime(investment_date, '%Y-%m-%d') + timedelta(days=5)).strftime(
-                                        '%Y-%m-%d'), auto_adjust=True)
-            price_on_date = hist_data['Close'].iloc[0]
+            hist_data = yf.download(asset, start=start_date.strftime('%Y-%m-%d'),
+                                    end=end_date.strftime('%Y-%m-%d'),
+                                    auto_adjust=True,
+                                    progress=False)
+            price_on_date = float(hist_data['Close'].iloc[0])
 
             # Perform calculations
-            shares_bought = amount_invested / price_on_date
-            current_value = shares_bought * current_prices[asset]
+            current_value = current_prices[asset] / price_on_date * amount_invested
             profit_loss = current_value - amount_invested
 
             # Add calculated fields to the transaction
@@ -118,6 +120,18 @@ def calculate_portfolio_performance(transactions: list):
         print(f"Error during portfolio calculation: {e}")
         # In case of an error, return the original transactions
         return transactions
+
+def is_market_open_on_date(asset: str, date_str: str):
+    """
+    Checks if the market for a given asset was open on a specific date by fetching data for that day.
+    """
+    try:
+        # Fetch data for a single day. yfinance is start-date inclusive.
+        data = yf.download(asset, start=date_str, period="1d", progress=False)
+        # If the returned DataFrame is empty, the market was closed.
+        return not data.empty
+    except Exception:
+        return False # Assume closed if any error occurs
 
 if __name__ == '__main__':
     # This block runs when you execute the script directly
@@ -133,5 +147,4 @@ if __name__ == '__main__':
     if 'recommended_asset' in signal_result:
         print(
             f"Based on the 12-month return of {signal_result['vt_12m_return_pct']}%, the recommended asset is: {signal_result['recommended_asset']}")
-
-
+    print(calculate_portfolio_performance([{'id': 'IJcFwc43rtHY8alo2Evi', 'asset': 'VT', 'amount': 10000.0, 'date': '2025-01-09'}, {'id': 'TKn4343xg76QuOY91Pmk', 'asset': 'VT', 'amount': 100.0, 'date': '2025-06-04'}]))

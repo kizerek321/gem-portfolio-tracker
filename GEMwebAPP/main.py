@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 
-from gemLogic import get_gem_signal, calculate_portfolio_performance
+from gemLogic import get_gem_signal, calculate_portfolio_performance, is_market_open_on_date
 
 try:
     cred = credentials.Certificate("serviceAccountKey.json")
@@ -32,6 +32,10 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+class DateValidationRequest(BaseModel):
+    asset: str
+    date: str
+
 class Transaction(BaseModel):
     id: str
     asset: str
@@ -39,6 +43,15 @@ class Transaction(BaseModel):
     date: str
 
 token_auth_scheme = HTTPBearer()
+
+@app.post("/api/validate-date")
+async def validate_market_date(request: DateValidationRequest):
+    """
+    Checks if the market for a given asset was open on the provided date.
+    """
+
+    is_open = is_market_open_on_date(request.asset, request.date)
+    return {"isValid": is_open}
 
 def get_current_user(cred: HTTPAuthorizationCredentials = Depends(token_auth_scheme)):
     """
@@ -52,9 +65,7 @@ def get_current_user(cred: HTTPAuthorizationCredentials = Depends(token_auth_sch
         decoded_token = auth.verify_id_token(token)
         return decoded_token
     except Exception as e:
-        # This is the crucial part: we print the actual error to our server console.
         print(f"!!! FIREBASE AUTHENTICATION ERROR: {e}")
-        # Then we raise the same 401 error to the client.
         raise HTTPException(status_code=401, detail="Invalid authentication credentials. See server logs for details.")
 
 @app.get("/api/gem-signal")
@@ -83,5 +94,7 @@ async def calculate_portfolio(transactions: List[Transaction], user=Depends(get_
     # Convert Pydantic models back to a list of dicts for the calculation function
     transaction_list = [tx.dict() for tx in transactions]
     #logging the user's UID for auditing is possible, e.g., print(f"Processing for user: {user['uid']}")
-
+    print(user)
+    print(transaction_list)
+    print(f"Processing for user: {user['uid']}")
     return calculate_portfolio_performance(transaction_list)
