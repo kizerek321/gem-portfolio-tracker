@@ -100,7 +100,9 @@ const PublicSignalView = () => {
 
   if (loading) return <LoadingSpinner message="Fetching latest signal..." />;
   if (error) return <ErrorMessage message={error} />;
-  return signalData && <SignalCard data={signalData} />;
+  if (!signalData) return <p>No signal data available.</p>;
+
+  return <SignalCard data={signalData} />;
 }
 
 // --- Main App Component ---

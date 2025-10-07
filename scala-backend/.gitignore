@@ -1,0 +1,17 @@
+# Local configuration files
+config.properties
+
+# Google Cloud credentials
+serviceAccountKey.json
+
+# Scala build artifacts
+/project/project/
+/project/target/
+/target/
+/build.sbt.lock
+
+# IDE-specific files
+.bloop/
+.metals/
+.idea/
+.vscode/
