@@ -69,7 +69,7 @@ object Main {
           "signal" -> signal,
           "calculationDate" -> latestDate,
           "return_12m" -> momentumReturn.toString,
-          "updatedAt" -> Timestamp.now().toString
+          "updatedAt" -> Timestamp.now() 
         )
         signalDocRef.set(signalData.asJava).get()
         println(s"Successfully wrote signal to Firestore.")
