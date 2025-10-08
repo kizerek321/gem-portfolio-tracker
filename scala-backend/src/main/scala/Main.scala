@@ -59,8 +59,10 @@ object Main {
         val existingPrices = historicalData.prices.asScala.toMap
         val updatedPrices = (existingPrices + (latestDate -> latestPrice)).toSeq.sortBy(_._1).reverse.take(daysToKeep).toMap
         val sortedPrices = updatedPrices.toSeq.sortBy(_._1)
-        val priceToday = sortedPrices.last._2.toDouble
-        val price12MonthsAgo = sortedPrices.head._2.toDouble
+        val (_, priceTodayStr) = sortedPrices.last
+        val (pastDate, price12MonthsAgoStr) = sortedPrices.head
+        val priceToday = priceTodayStr.toDouble
+        val price12MonthsAgo = price12MonthsAgoStr.toDouble
         val momentumReturn = priceToday / price12MonthsAgo - 1
         val signal = if (momentumReturn > 0) "VT" else "BND"
         println(s"Calculated 12M return: ${"%.2f".format(momentumReturn * 100)}%. Signal: $signal")
@@ -69,7 +71,10 @@ object Main {
           "signal" -> signal,
           "calculationDate" -> latestDate,
           "return_12m" -> momentumReturn.toString,
-          "updatedAt" -> Timestamp.now() 
+          "current_price" -> priceTodayStr,
+          "past_price_date" -> pastDate,
+          "past_price" -> price12MonthsAgoStr,
+          "updatedAt" -> Timestamp.now()
         )
         signalDocRef.set(signalData.asJava).get()
         println(s"Successfully wrote signal to Firestore.")

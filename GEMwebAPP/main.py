@@ -39,13 +39,6 @@ class Transaction(BaseModel):
     date: str
 
 token_auth_scheme = HTTPBearer()
-def get_current_user(cred: HTTPAuthorizationCredentials = Depends(token_auth_scheme)):
-    try:
-        token = cred.credentials
-        return auth.verify_id_token(token)
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid auth credentials: {e}")
-
 @app.get("/")
 async def read_root():
     return {"message": "Welcome to the GEM Strategy API"}
@@ -96,9 +89,9 @@ async def read_precalculated_gem_signal():
             "signal_date": signal_data.get("calculationDate"),
             "vt_12m_return_pct": float(signal_data.get("return_12m", 0.0)) * 100,
             "calculation_details": {
-                "current_price": "N/A",
-                "past_price_date": "N/A",
-                "past_price": "N/A",
+                "current_price": signal_data.get("current_price", "N/A"),
+                "past_price_date": signal_data.get("past_price_date", "N/A"),
+                "past_price": signal_data.get("past_price", "N/A"),
             },
             "signal": signal_data.get("signal"),
             "risk_on_asset": "VT",

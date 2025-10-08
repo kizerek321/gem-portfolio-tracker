@@ -1,8 +1,12 @@
 import React, { useState, useEffect, Fragment } from 'react';
+import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { auth } from '/src/firebase/config.js'; // FIX: Using absolute path from root
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { AuthForm } from '/src/components/AuthForm.jsx'; // FIX: Using absolute path from root
 import { Dashboard } from './components/Dashboard.jsx';
+import AboutStrategy from './components/AboutStrategy.jsx';
+import AboutAuthor from './components/AboutAuthor.jsx';
+
 
 // --- Helper Components for better UI structure ---
 
@@ -52,11 +56,11 @@ const SignalCard = ({ data }) => {
           <p className="font-mono text-gray-900">{data.calculation_details.current_price}$</p>
         </div>
         <div className="flex justify-between items-center text-sm">
-          <p className="font-medium text-gray-700">12M Lookback Date:</p>
+          <p className="font-medium text-gray-700">280 days lookback date:</p>
           <p className="font-mono text-gray-900">{data.calculation_details.past_price_date}</p>
         </div>
         <div className="flex justify-between items-center text-sm">
-          <p className="font-medium text-gray-700">12M Lookback Price:</p>
+          <p className="font-medium text-gray-700">280 days Lookback Price:</p>
           <p className="font-mono text-gray-900">{data.calculation_details.past_price}$</p>
         </div>
         <div className="flex justify-between items-center text-lg">
@@ -83,7 +87,7 @@ const PublicSignalView = () => {
   useEffect(() => {
     const fetchSignal = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/gem-signal');
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/gem-signal`);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         if (data.error) throw new Error(data.error);
@@ -107,43 +111,26 @@ const PublicSignalView = () => {
 
 // --- Main App Component ---
 function App() {
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [page, setPage] = useState('home'); // 'home' or 'auth'
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        setPage('dashboard'); // Or 'home' if you want logged-in users to see the signal first
-      } else {
-        setPage('home');
-      }
       setAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
   
   const handleLogout = () => {
-    signOut(auth).catch(error => console.error("Logout error:", error));
-    // The onAuthStateChanged listener will automatically set page to 'home'
-  };
-
-  const renderContent = () => {
-    if (user) {
-      // If the user is logged in, show the Dashboard.
-      return <Dashboard user={user} />;
-    } else {
-      // If logged out, show either the home signal or the auth form.
-      switch(page) {
-        case 'auth':
-          return <AuthForm />;
-        case 'home':
-        default:
-          return <PublicSignalView />;
-      }
-    }
-  };
+    signOut(auth)
+      .then(() => {
+        // This code runs after the user is successfully signed out
+        navigate('/'); // Navigate to the main page
+      })
+      .catch(error => console.error("Logout error:", error));
+};
 
   if (authLoading) {
     return (
@@ -155,7 +142,6 @@ function App() {
 
   return (
     <div className="bg-gray-50 font-sans min-h-screen relative p-4">
-      {/* Button is now positioned relative to the whole screen */}
       <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-10">
         {user ? (
           <button 
@@ -165,28 +151,34 @@ function App() {
             Logout
           </button>
         ) : (
-          <button 
-            onClick={() => setPage('auth')}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-md"
-          >
-            Sign In / Register
-          </button>
+          <Link to="/auth">
+            <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-md">
+              Sign In / Register
+            </button>
+          </Link>
         )}
       </div>
 
       <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
         <header className="text-center py-6 w-full">
-          <h1 
-            className="text-2xl sm:text-3xl font-extrabold text-gray-800 cursor-pointer"
-            onClick={() => setPage(user ? 'dashboard' : 'home')}
-          >
-            Global Equity Momentum
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-800">
+            <Link to="/">Global Equity Momentum</Link>
           </h1>
           <p className="text-lg text-gray-600 mt-2">A data-driven investment signal</p>
+          <nav className="mt-4">
+            <Link to="/about-strategy" className="text-blue-600 hover:underline mx-2">About Strategy</Link>
+            <Link to="/about-author" className="text-blue-600 hover:underline mx-2">About the Author</Link>
+          </nav>
         </header>
         
         <main className="w-full mt-8">
-          {renderContent()}
+          <Routes>
+            <Route path="/" element={<PublicSignalView />} />
+            <Route path="/about-strategy" element={<AboutStrategy />} />
+            <Route path="/about-author" element={<AboutAuthor />} />
+            <Route path="/auth" element={<AuthForm />} />
+            {user && <Route path="/dashboard" element={<Dashboard user={user} />} />}
+          </Routes>
         </main>
       </div>
 

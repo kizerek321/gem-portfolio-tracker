@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { auth } from '/src/firebase/config.js';
 import { 
   createUserWithEmailAndPassword, 
@@ -6,6 +7,7 @@ import {
 } from "firebase/auth";
 
 export const AuthForm = () => {
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,7 +25,7 @@ export const AuthForm = () => {
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
-      // No need to set user state here, the onAuthStateChanged listener in App.jsx will handle it.
+      navigate('/dashboard');
     } catch (err) {
       if (err.code === 'auth/wrong-password') {
         setError('Incorrect password. Please try again.');

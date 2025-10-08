@@ -57,7 +57,7 @@ export const Dashboard = ({ user }) => {
       setCalculating(true);
       try {
         const token = await user.getIdToken();
-        const response = await fetch('http://127.0.0.1:8000/api/calculate-portfolio', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/calculate-portfolio`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -89,7 +89,7 @@ export const Dashboard = ({ user }) => {
       setDateValidationMessage('');
       setIsDateValid(false); // Assume invalid until proven otherwise
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/validate-date', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/validate-date`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ asset, date })
@@ -184,8 +184,6 @@ export const Dashboard = ({ user }) => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {/* --- FIX IS HERE --- */}
-                  {/* We now map over the base portfolio and LOOK FOR enriched data */}
                   {portfolio.map(tx => {
                     const enrichedTx = enrichedPortfolio.find(etx => etx.id === tx.id);
                     const currentValue = enrichedTx ? parseFloat(enrichedTx.currentValue) : NaN;
