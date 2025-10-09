@@ -14,7 +14,7 @@ object Main {
     val configFile = new FileInputStream(configPath)
     properties.load(configFile)
     val key = properties.getProperty("alphavantage.apikey")
-    if (key == null || key.trim.isEmpty || key == "YOUR_API_KEY_HERE") {
+    if (key == null || key.trim.isEmpty) {
       throw new RuntimeException(s"API key 'alphavantage.apikey' is missing or not set in $configPath")
     }
     println("API key loaded successfully.")

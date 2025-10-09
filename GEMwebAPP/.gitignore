@@ -3,6 +3,7 @@ serviceAccountKey.json
 Python virtual environment
 /venv
 /.venv
+.env
 /env/
 /venv.bak/
 /ENV/

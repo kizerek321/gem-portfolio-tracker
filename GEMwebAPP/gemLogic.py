@@ -1,7 +1,8 @@
 import yfinance as yf
+import requests
 from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
-import pandas as pd
+import os
+from dotenv import load_dotenv
 
 # Define the tickers for our strategy
 RISK_ON_ASSET = 'VT'  # Vanguard Total World Stock ETF
@@ -55,25 +56,15 @@ def is_market_open_on_date(asset: str, date_str: str):
     Checks if the market for a given asset was open on a specific date by fetching data for that day.
     """
     try:
+        load_dotenv()
+        API_KEY = os.getenv("ALPHAVANTAGE_API_KEY")
+        url = f'https://www.alphavantage.co/query?function=MARKET_STATUS&apikey={API_KEY}'
+        response = requests.get(url)
+        data = response.json()
+
         # Fetch data for a single day. yfinance is start-date inclusive.
         data = yf.download(asset, start=date_str, period="1d", progress=False)
         # If the returned DataFrame is empty, the market was closed.
         return not data.empty
     except Exception:
         return False # Assume closed if any error occurs
-
-if __name__ == '__main__':
-    # This block runs when you execute the script directly
-    signal_result = get_gem_signal()
-
-    # Pretty print the result
-    import json
-
-    print("\n--- GEM Signal Result ---")
-    print(json.dumps(signal_result, indent=2))
-    print("-----------------------\n")
-
-    if 'recommended_asset' in signal_result:
-        print(
-            f"Based on the 12-month return of {signal_result['vt_12m_return_pct']}%, the recommended asset is: {signal_result['recommended_asset']}")
-    print(calculate_portfolio_performance([{'id': 'IJcFwc43rtHY8alo2Evi', 'asset': 'VT', 'amount': 10000.0, 'date': '2025-01-09'}, {'id': 'TKn4343xg76QuOY91Pmk', 'asset': 'VT', 'amount': 100.0, 'date': '2025-06-04'}]))
