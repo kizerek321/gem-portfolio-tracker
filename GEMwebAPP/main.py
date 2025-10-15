@@ -1,5 +1,3 @@
-# C:/Users/kizer/Documents/app/GEMwebAPP/main.py
-
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 from fastapi import FastAPI, Depends, HTTPException
@@ -9,7 +7,7 @@ from pydantic import BaseModel
 from typing import List
 
 # Import the refactored functions and the assets list
-from gemLogic import calculate_portfolio_performance, is_market_open_on_date, assets
+from gemLogic import calculate_portfolio_performance, is_market_open_on_date, assets, generate_portfolio_history
 
 try:
     cred = credentials.Certificate("serviceAccountKey.json")
@@ -19,7 +17,6 @@ try:
 except Exception as e:
     print(f"!!! CRITICAL: Failed to initialize Firebase Admin SDK: {e}")
     print("!!! Make sure 'serviceAccountKey.json' is in the correct directory.")
-    # Exit if DB connection fails, as the app is useless without it.
     exit()
 
 app = FastAPI()
@@ -126,3 +123,12 @@ async def calculate_portfolio(transactions: List[Transaction], user=Depends(get_
     transaction_list = [tx.dict() for tx in transactions]
     # Pass the db instance to the calculation function
     return calculate_portfolio_performance(db, transaction_list)
+
+@app.post("/api/portfolio-history")
+async def calculate_portfolio_history(transactions: List[Transaction], user=Depends(get_current_user)):
+    """
+    Protected endpoint. Generates a day-by-day history of the portfolio's value and profit.
+    """
+    print("api called")
+    transaction_list = [tx.dict() for tx in transactions]
+    return generate_portfolio_history(db, transaction_list)

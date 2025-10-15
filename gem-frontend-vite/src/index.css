@@ -1,1 +1,9 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap');
+
+@layer base {
+  body {
+    /* Set the default dark background and light text color */
+    @apply bg-gray-900 text-gray-200 antialiased;
+  }
+}

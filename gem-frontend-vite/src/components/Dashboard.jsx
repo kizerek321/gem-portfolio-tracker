@@ -1,218 +1,237 @@
-import React, { useState, useEffect } from 'react';
-import { db, auth } from '/src/firebase/config.js';
-import { collection, addDoc, query, onSnapshot } from "firebase/firestore";
+import React, { useState, useEffect, useMemo } from 'react';
+import { db } from '/src/firebase/config.js';
+import { collection, addDoc, query, onSnapshot, orderBy } from "firebase/firestore";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
+// Import the new components
+import KPICard from './KPICard.jsx';
+import AddTransactionModal from './AddTransactionModal.jsx';
+
+// --- Icon components for KPICards (replace with actual SVGs for better quality) ---
+const ValueIcon = () => <span className="text-2xl">💰</span>;
+const ProfitIcon = () => <span className="text-2xl">📈</span>;
+const InvestedIcon = () => <span className="text-2xl">🏦</span>;
 
 const CalculatingSpinner = () => (
-  <td colSpan="5" className="text-center p-4">
-    <div className="flex justify-center items-center text-gray-500">
-      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <div className="flex justify-center items-center text-gray-400">
+      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-brand-blue" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
       </svg>
-      <span>Calculating current values...</span>
+      <span>Calculating...</span>
     </div>
-  </td>
 );
 
 export const Dashboard = ({ user }) => {
   const [portfolio, setPortfolio] = useState([]); // Raw data from Firestore
   const [enrichedPortfolio, setEnrichedPortfolio] = useState([]); // Data with calculations
   const [loading, setLoading] = useState(true); // For initial Firestore load
-  const [calculating, setCalculating] = useState(false); // For backend calculation load
-  
-  // Form state
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [amount, setAmount] = useState('');
-  const [asset, setAsset] = useState('VT');
-  // Date validation state
-  const [isValidatingDate, setIsValidatingDate] = useState(false);
-  const [dateValidationMessage, setDateValidationMessage] = useState('');
-  const [isDateValid, setIsDateValid] = useState(false);
-  // EFFECT 1: Fetch raw transactions from Firestore
+  const [calculating, setCalculating] = useState(false); // For backend calculation
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [portfolioHistory, setPortfolioHistory] = useState([]);
+  const [chartLoading, setChartLoading] = useState(true);
+  const [chartError, setChartError] = useState(null);
+
+  // --- Data Fetching and Processing ---
   useEffect(() => {
     if (!user) return;
-    setLoading(true);
     const userTransactionsRef = collection(db, "users", user.uid, "transactions");
-    const q = query(userTransactionsRef);
+    const q = query(userTransactionsRef, orderBy("date", "asc"));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const transactions = [];
-      querySnapshot.forEach((doc) => {
-        transactions.push({ id: doc.id, ...doc.data() });
-      });
+      const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setPortfolio(transactions);
       setLoading(false);
     });
     return () => unsubscribe();
   }, [user]);
 
-  // EFFECT 2: Fetch calculations from backend when portfolio changes
   useEffect(() => {
+    if (portfolio.length === 0 || !user) {
+      setEnrichedPortfolio([]);
+      return;
+    }
     const fetchCalculations = async () => {
-      if (portfolio.length === 0 || !user) {
-        setEnrichedPortfolio([]); // Clear enriched data if portfolio is empty
-        return;
-      }
-
       setCalculating(true);
       try {
         const token = await user.getIdToken();
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/calculate-portfolio`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify(portfolio)
         });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch calculations from the backend.');
-        }
+        if (!response.ok) throw new Error('Backend calculation failed.');
         const calculatedData = await response.json();
         setEnrichedPortfolio(calculatedData);
       } catch (error) {
         console.error("Calculation error:", error);
-        // If calculation fails, show the portfolio without the calculated values
-        setEnrichedPortfolio(portfolio); 
+        setEnrichedPortfolio(portfolio.map(tx => ({...tx, currentValue: tx.amount, profitLoss: 0})));
       } finally {
         setCalculating(false);
       }
     };
-
     fetchCalculations();
-  }, [portfolio, user]); // Rerun this effect when the raw portfolio or user changes
+  }, [portfolio, user]);
 
   useEffect(() => {
-    const validateDate = async () => {
-      setIsValidatingDate(true);
-      setDateValidationMessage('');
-      setIsDateValid(false); // Assume invalid until proven otherwise
-      try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/validate-date`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ asset, date })
-        });
-        const data = await response.json();
-        if (data.isValid) {
-          setIsDateValid(true);
-        } else {
-          setDateValidationMessage('Market was closed on this date. Please pick another.');
-        }
-      } catch (error) {
-        console.error("Date validation error:", error);
-        setDateValidationMessage('Could not validate date.');
-      } finally {
-        setIsValidatingDate(false);
-      }
-    };
-    validateDate();
-  }, [date, asset]); // Rerun whenever the date or asset in the form changes
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!amount || Number(amount) <= 0) {
-      alert("Please enter a valid amount.");
+    if (portfolio.length === 0 || !user) {
+      setPortfolioHistory([]);
+      setChartLoading(false);
       return;
     }
+    const fetchPortfolioHistory = async () => {
+      setChartLoading(true); 
+      setChartError(null);   
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/portfolio-history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(portfolio)
+        });
+        if (!response.ok) throw new Error('Failed to fetch portfolio history from backend.');
+        const historyData = await response.json();
+        setPortfolioHistory(historyData);
+      } catch (error) {
+        console.error("Failed to fetch portfolio history:", error);
+        setChartError(error.message); 
+      } finally {
+        setChartLoading(false); 
+      }
+    };
+    fetchPortfolioHistory();
+  }, [portfolio, user]);
+
+  // --- Memoized Calculations for KPIs and Chart ---
+  const { totalCurrentValue, totalInvested, totalProfitLoss, profitLossPct } = useMemo(() => {
+    if (enrichedPortfolio.length === 0 || calculating) {
+      return { totalCurrentValue: 0, totalInvested: 0, totalProfitLoss: 0, profitLossPct: 0 };
+    }
+    const totalInvested = enrichedPortfolio.reduce((sum, tx) => sum + tx.amount, 0);
+    const totalCurrentValue = enrichedPortfolio.reduce((sum, tx) => sum + (parseFloat(tx.currentValue) || 0), 0);
+    const totalProfitLoss = totalCurrentValue - totalInvested;
+    const profitLossPct = totalInvested > 0 ? (totalProfitLoss / totalInvested) * 100 : 0;
+    return { totalCurrentValue, totalInvested, totalProfitLoss, profitLossPct };
+  }, [enrichedPortfolio, calculating]);
+  
+  // --- Handlers ---
+  const handleAddTransaction = async (transactionData) => {
     try {
       const userTransactionsRef = collection(db, "users", user.uid, "transactions");
-      await addDoc(userTransactionsRef, { date, amount: Number(amount), asset });
-      setAmount('');
-      setDate(new Date().toISOString().split('T')[0]);
+      await addDoc(userTransactionsRef, transactionData);
+      setIsModalOpen(false); // Close modal on success
     } catch (error) {
       console.error("Error adding document: ", error);
-      alert("Failed to add transaction. Please try again.");
+      alert("Failed to add transaction.");
     }
   };
 
+  const profitColor = totalProfitLoss >= 0 ? 'text-brand-green' : 'text-brand-red';
+
   return (
-    <div className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-5 gap-8">
-      {/* Column 1: Add Transaction Form */}
-      <div className="lg:col-span-2">
-        <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Add Transaction</h3>
-          <form onSubmit={handleSubmit}>
-             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="date">Date</label>
-              <input 
-                type="date" id="date" value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required
-              />
+    <div className="space-y-8">
+      {/* --- Header --- */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold font-display text-white">Dashboard</h1>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="bg-brand-blue hover:bg-blue-500 text-white font-bold py-2 px-5 rounded-lg transition-colors shadow-lg"
+        >
+          + Add Transaction
+        </button>
+      </div>
+
+      {/* --- KPI Cards --- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <KPICard title="Total Portfolio Value" value={`$${totalCurrentValue.toFixed(2)}`} icon={<ValueIcon />} isLoading={calculating} />
+        <KPICard title="Total Profit / Loss" value={`${totalProfitLoss >= 0 ? '+' : ''}$${totalProfitLoss.toFixed(2)}`} change={`${profitLossPct.toFixed(2)}%`} changeColor={profitColor} icon={<ProfitIcon />} isLoading={calculating} />
+        <KPICard title="Total Amount Invested" value={`$${totalInvested.toFixed(2)}`} icon={<InvestedIcon />} isLoading={loading} />
+      </div>
+
+      {/* --- Portfolio Chart --- */}
+      <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg h-96">
+        <h3 className="text-xl font-bold text-white mb-4">Portfolio History</h3>
+        {chartLoading ? (
+            <div className="flex items-center justify-center h-full text-gray-500">
+                <CalculatingSpinner /> <span className="ml-2">Loading Chart Data...</span>
             </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="amount">Amount (USD)</label>
-              <input type="number" id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g., 500" className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
+        )  : portfolioHistory.length > 0 ? (
+          <ResponsiveContainer width="100%" height="90%">
+            <LineChart data={portfolioHistory}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="date" stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 12 }} />
+              <YAxis stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 12 }} tickFormatter={(value) => `$${value}`} />
+              <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151' }} />
+              <Legend />
+              <Line type="monotone" dataKey="portfolioValue" name="Portfolio Value" stroke="#3B82F6" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="totalInvested" name="Total Invested" stroke="#6B7280" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="cumulativeProfit" name="Cumulative Profit" stroke="#10B981" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        ): chartError ? (
+            <div className="flex items-center justify-center h-full text-red-400">
+                <p>Could not load chart data. Please try again later.</p>
             </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="asset">Asset</label>
-              <select id="asset" value={asset} onChange={(e) => setAsset(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                <option value="VT">Global Equities (VT)</option>
-                <option value="BND">Bonds (BND)</option>
-              </select>
-            </div>
-            <div className="mt-4">
-              {dateValidationMessage && <p className="text-red-500 text-xs italic mb-2">{dateValidationMessage}</p>}
-              <button
-                type="submit"
-                disabled={!isDateValid || isValidatingDate}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {isValidatingDate ? 'Validating Date...' : 'Add to Portfolio'}
-              </button>
-            </div>
-          </form>
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            <p>Add transactions to see your portfolio chart.</p>
+          </div>
+        )}
+      </div>
+
+      {/* --- Portfolio Table --- */}
+      <div className="bg-gray-800 rounded-xl border border-gray-700 shadow-lg overflow-hidden">
+        <div className="p-6">
+            <h3 className="text-xl font-bold text-white">Your Transactions</h3>
+        </div>
+        <div className="overflow-x-auto">
+          {loading ? <p className="p-6 text-center text-gray-400">Loading portfolio...</p> : (
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-gray-900/50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Asset</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Amount Invested</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Current Value</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Profit/Loss</th>
+                </tr>
+              </thead>
+              <tbody className="bg-gray-800 divide-y divide-gray-700">
+                {enrichedPortfolio.map(tx => {
+                  const profitLoss = parseFloat(tx.profitLoss) || 0;
+                  const isProfit = profitLoss >= 0;
+                  const plColorClass = isProfit ? 'bg-green-500/10 text-brand-green' : 'bg-red-500/10 text-brand-red';
+                  return (
+                    <tr key={tx.id} className="hover:bg-gray-700/50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.date}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 font-mono">{tx.asset}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${Number(tx.amount).toFixed(2)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-white">
+                        {calculating ? <CalculatingSpinner /> : `$${(parseFloat(tx.currentValue) || 0).toFixed(2)}`}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {calculating ? '' : (
+                          <span className={`px-3 py-1 rounded-full font-semibold text-xs ${plColorClass}`}>
+                            {isProfit ? '+' : ''}${(profitLoss).toFixed(2)}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          {(!loading && portfolio.length === 0) && <p className="text-center text-gray-500 p-8">Your portfolio is empty. Add your first transaction!</p>}
         </div>
       </div>
 
-      {/* Column 2: Portfolio Display*/}
-      <div className="lg:col-span-3">
-        <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Your Portfolio</h3>
-          <div className="overflow-x-auto">
-            {loading ? <p>Loading portfolio...</p> : (
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asset</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount Invested</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Value</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit/Loss</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {portfolio.map(tx => {
-                    const enrichedTx = enrichedPortfolio.find(etx => etx.id === tx.id);
-                    const currentValue = enrichedTx ? parseFloat(enrichedTx.currentValue) : NaN;
-                    const profitLoss = enrichedTx ? parseFloat(enrichedTx.profitLoss) : NaN;
-                    const isProfit = profitLoss >= 0;
-                    const profitColor = isProfit ? 'text-green-600' : 'text-red-600';
-                    
-                    return (
-                      <tr key={tx.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{tx.date}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{tx.asset}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${Number(tx.amount).toFixed(2)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {calculating || isNaN(currentValue) ? <CalculatingSpinner /> : `$${currentValue.toFixed(2)}`}
-                        </td>
-                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${profitColor}`}>
-                          {calculating || isNaN(profitLoss) ? '' : `${isProfit ? '+' : ''}$${profitLoss.toFixed(2)}`}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-            {(!loading && portfolio.length === 0) && <p className="text-center text-gray-500 mt-4">Your portfolio is empty. Add your first transaction!</p>}
-          </div>
-        </div>
-      </div>
+      {/* --- Add Transaction Modal --- */}
+      <AddTransactionModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleAddTransaction}
+        user={user}
+      />
     </div>
   );
 };
-

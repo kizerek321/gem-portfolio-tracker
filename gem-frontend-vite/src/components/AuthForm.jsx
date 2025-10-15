@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '/src/firebase/config.js';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword
 } from "firebase/auth";
 
 export const AuthForm = () => {
@@ -36,24 +36,23 @@ export const AuthForm = () => {
       } else {
         setError('Failed to authenticate. Please check your credentials.');
       }
-      console.error("Firebase auth error:", err.code, err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="w-full max-w-md mx-auto mt-12 bg-white p-8 border border-gray-200 rounded-xl shadow-lg">
-      <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
-        {isLogin ? 'Login to Your Account' : 'Create an Account'}
+    <div className="w-full max-w-md mx-auto mt-12 bg-gray-800 p-8 border border-gray-700 rounded-xl shadow-2xl">
+      <h2 className="text-3xl font-display font-bold text-center text-white mb-6">
+        {isLogin ? 'Welcome Back' : 'Create an Account'}
       </h2>
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
+          <label className="block text-gray-400 text-sm font-bold mb-2" htmlFor="email">
             Email Address
           </label>
           <input
-            className="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="shadow-sm appearance-none border border-gray-600 bg-gray-700 rounded-lg w-full py-3 px-4 text-gray-200 leading-tight focus:outline-none focus:ring-2 focus:ring-brand-blue"
             id="email"
             type="email"
             placeholder="you@example.com"
@@ -63,11 +62,11 @@ export const AuthForm = () => {
           />
         </div>
         <div className="mb-6">
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
+          <label className="block text-gray-400 text-sm font-bold mb-2" htmlFor="password">
             Password
           </label>
           <input
-            className="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 mb-3 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="shadow-sm appearance-none border border-gray-600 bg-gray-700 rounded-lg w-full py-3 px-4 text-gray-200 mb-3 leading-tight focus:outline-none focus:ring-2 focus:ring-brand-blue"
             id="password"
             type="password"
             placeholder="******************"
@@ -76,10 +75,10 @@ export const AuthForm = () => {
             required
           />
         </div>
-        {error && <p className="text-red-500 text-xs italic mb-4">{error}</p>}
+        {error && <p className="text-brand-red text-sm mb-4">{error}</p>}
         <div className="flex items-center justify-between flex-col">
           <button
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition-colors duration-300 disabled:bg-gray-400"
+            className="w-full bg-brand-blue hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition-colors duration-300 disabled:bg-gray-600"
             type="submit"
             disabled={loading}
           >
@@ -87,11 +86,8 @@ export const AuthForm = () => {
           </button>
           <button
             type="button"
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setError(null);
-            }}
-            className="mt-4 inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800"
+            onClick={() => { setIsLogin(!isLogin); setError(null); }}
+            className="mt-4 inline-block align-baseline font-bold text-sm text-blue-400 hover:text-blue-300"
           >
             {isLogin ? 'Need an account? Sign Up' : 'Already have an account? Login'}
           </button>
