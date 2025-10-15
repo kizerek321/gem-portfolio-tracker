@@ -29,7 +29,7 @@ object Main {
   }
 
   // --- Application Setup ---
-  val assets = List("CBU0.L", "CNDX.L", "EIMI.L", "IB01.L", "IWDA.L", "SMH.L")
+  val assets = List("CBU0.L", "EIMI.L", "IB01.L", "IWDA.L")
   val daysToKeep = 280 // Approximately 13 months of trading days
   val db = FireBaseClient.db // Get the initialized DB instance
 
@@ -74,7 +74,7 @@ object Main {
               println(s"Successfully created new price document for $ticker for $latestYear-$latestMonth.")
             }else{
               val updateData: Map[String, Any] = Map(
-                s"prices.$latestDate" -> latestPrice.toDouble, // e.g., "prices.2025-10-14"
+                s"prices.$latestDate" -> latestPrice, // e.g., "prices.2025-10-14"
                 "updatedAt" -> Timestamp.now()
               )
               monthDocRef.update(updateData.asJava).get()
