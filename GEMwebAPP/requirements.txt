@@ -1,0 +1,17 @@
+# FastAPI framework and server
+fastapi
+gunicorn
+uvicorn
+# Firebase Admin SDK
+firebase-admin
+
+# Pydantic for data validation
+pydantic
+
+# Redis for caching and rate limiting
+redis
+fastapi-limiter
+fastapi-cache2
+
+# Pandas for data manipulation in gemLogic.py
+pandas

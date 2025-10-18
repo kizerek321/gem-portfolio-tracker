@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import pandas as pd
 
-assets = ["CBU0.L", "CNDX.L", "EIMI.L", "IB01.L", "IWDA.L", "SMH.L"]
+assets = ["CBU0.L", "EIMI.L", "IB01.L", "IWDA.L"]
 
 def _get_price_on_or_after(db, asset: str, date_str: str):
     """

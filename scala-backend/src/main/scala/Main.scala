@@ -1,28 +1,40 @@
 import com.google.cloud.Timestamp
 import com.google.cloud.firestore.SetOptions
-import java.io.FileInputStream
+import com.google.cloud.secretmanager.v1.{SecretManagerServiceClient, SecretVersionName}
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Properties
 import scala.jdk.CollectionConverters._
 
-object Main {
+object Main extends App {
 
+  private def getSecret(secretId: String, versionId: String = "latest"): String = {
+    // IMPORTANT: Replace this with your actual GCP Project ID
+    val projectId = "gem-portfolio-tracker"
+    // The client will automatically use the application's default credentials
+    val client = SecretManagerServiceClient.create()
+    try {
+      val secretVersionName = SecretVersionName.of(projectId, secretId, versionId)
+      val response = client.accessSecretVersion(secretVersionName)
+      response.getPayload.getData.toStringUtf8
+    } finally {
+      client.close()
+    }
+  }
+  
   // --- Configuration Loading ---
   val properties = new Properties()
   val configPath = "config.properties"
   val apiKey: String = try {
-    val configFile = new FileInputStream(configPath)
-    properties.load(configFile)
-    val key = properties.getProperty("alphavantage.apikey")
+    val key = getSecret("alphavantage-api-key-scala")
     if (key == null || key.trim.isEmpty) {
-      throw new RuntimeException(s"API key 'alphavantage.apikey' is missing or not set in $configPath")
+      throw new RuntimeException("API key from Secret Manager is missing or empty.")
     }
-    println("API key loaded successfully.")
+    println("API key loaded successfully from Secret Manager.")
     key
   } catch {
     case e: Exception =>
-      println(s"CRITICAL: Could not load API key from '$configPath'. Please ensure the file exists and contains a valid 'alphavantage.apikey'.")
+      println(s"CRITICAL: Could not load API key 'alphavantage-api-key' from Google Cloud Secret Manager.")
       println(e.getMessage)
       System.exit(1)
       ""
@@ -233,18 +245,15 @@ object Main {
     }
   }
 
-  @main
-  def run(args: String*): Unit = {
-    if (args.contains("backfill")) {
+  if (args != null && args.contains("backfill")) {
       println("Running backfill...")
       runBackFill()
-    }else if (args.contains("test_history")){
+  }else if (args != null && args.contains("test_history")){
       test()
-    } else if (args.contains("test_daily")) {
+  } else if ( args != null && args.contains("test_daily")) {
       test_signal()
-    }else {
+  }else {
       println("Running daily update...")
       runDailyUpdate()
-    }
   }
 }

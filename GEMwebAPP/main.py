@@ -1,27 +1,52 @@
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
 
+from typing import List
+import os
+
+import redis.asyncio as redis
+from fastapi_limiter import FastAPILimiter
+from fastapi_limiter.depends import RateLimiter
+
+from contextlib import asynccontextmanager
 # Import the refactored functions and the assets list
 from gemLogic import calculate_portfolio_performance, is_market_open_on_date, assets, generate_portfolio_history
 
 try:
-    cred = credentials.Certificate("serviceAccountKey.json")
-    firebase_admin.initialize_app(cred)
+    firebase_admin.initialize_app()
     db = firestore.client()
-    print("Firebase Admin SDK initialized successfully.")
+    print("Firebase Admin SDK initialized successfully using application default credentials.")
 except Exception as e:
     print(f"!!! CRITICAL: Failed to initialize Firebase Admin SDK: {e}")
-    print("!!! Make sure 'serviceAccountKey.json' is in the correct directory.")
-    exit()
+    raise e
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Get Redis URL from environment variable, with a fallback for local dev
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost")
 
-origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    print(f"Connecting to Redis at: {redis_url}")
+    redis_instance = redis.from_url(redis_url)
+
+    # Init Rate Limiter
+    await FastAPILimiter.init(redis_instance)
+    print("FastAPILimiter initialized.")
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+allowed_origins_str = os.environ.get(
+    "CORS_ALLOWED_ORIGINS",
+    "https://gem-portfolio-tracker.web.app, http://localhost:5173"
+)
+
+# Split the comma-separated string into a list
+origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 
 app.add_middleware(
     CORSMiddleware,
@@ -65,7 +90,7 @@ def get_current_user(cred: HTTPAuthorizationCredentials = Depends(token_auth_sch
 async def read_root():
     return {"message": "Welcome to the GEM Strategy API"}
 
-@app.post("/api/validate-date")
+@app.post("/api/validate-date", dependencies=[Depends(RateLimiter(times=30, seconds=60))])
 async def validate_market_date(request: DateValidationRequest):
     """
     Checks if a price exists for the given asset on the provided date in Firestore.
@@ -73,7 +98,7 @@ async def validate_market_date(request: DateValidationRequest):
     is_open = is_market_open_on_date(db, request.asset, request.date)
     return {"isValid": is_open}
 
-@app.get("/api/gem-signal")
+@app.get("/api/gem-signal", dependencies=[Depends(RateLimiter(times=15, seconds=60))])
 async def read_precalculated_gem_signal():
     """
     Reads pre-calculated signals for all assets from Firestore, determines the
@@ -114,7 +139,7 @@ async def read_precalculated_gem_signal():
         print(f"Error processing signals from Firestore: {e}")
         raise HTTPException(status_code=500, detail="Could not process GEM signal from the database.")
 
-@app.post("/api/calculate-portfolio")
+@app.post("/api/calculate-portfolio",dependencies=[Depends(RateLimiter(times=5, minutes=1))])
 async def calculate_portfolio(transactions: List[Transaction], user=Depends(get_current_user)):
     """
     Protected endpoint. Calculates portfolio performance using data from Firestore.
@@ -124,11 +149,10 @@ async def calculate_portfolio(transactions: List[Transaction], user=Depends(get_
     # Pass the db instance to the calculation function
     return calculate_portfolio_performance(db, transaction_list)
 
-@app.post("/api/portfolio-history")
+@app.post("/api/portfolio-history",dependencies=[Depends(RateLimiter(times=3, minutes=1))])
 async def calculate_portfolio_history(transactions: List[Transaction], user=Depends(get_current_user)):
     """
     Protected endpoint. Generates a day-by-day history of the portfolio's value and profit.
     """
-    print("api called")
     transaction_list = [tx.dict() for tx in transactions]
     return generate_portfolio_history(db, transaction_list)

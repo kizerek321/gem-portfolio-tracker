@@ -27,7 +27,9 @@ Editor directories and files
 *.njsproj
 *.sln
 *.sw?
-
+.firebaserc
+firebase.json
+.firebase
 # Local configuration files
 config.properties
 
