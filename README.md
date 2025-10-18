@@ -23,7 +23,7 @@ This project utilizes a modern, microservice-based architecture with a clear sep
 | **Backend API** | ![Python Badge](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white) ![FastAPI Badge](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white) ![Docker Badge](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white) |
 | **Data Processing Service** | ![Scala Badge](https://img.shields.io/badge/Scala-DC322F?logo=scala&logoColor=white) ![SBT Badge](https://img.shields.io/badge/SBT-262626?logo=sbt&logoColor=white) ![Docker Badge](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white) |
 | **Database & Auth** | ![Firebase Badge](https://img.shields.io/badge/Firebase-FFCA28?logo=firebase&logoColor=black)                |
-| **Cloud & Deployment** | ![Google Cloud Badge](https://img.shields.io/badge/Google_Cloud-4285F4?logo=googlecloud&logoColor=white) (Cloud Run, Cloud Scheduler) & Firebase Hosting |
+| **Cloud & Deployment** | ![Google Cloud Badge](https://img.shields.io/badge/Google_Cloud-4285F4?logo=googlecloud&logoColor=white) (Cloud Run, Cloud Scheduler, serverless VPC access, Memorystore for redis) & (Firebase Hosting, Firebase NoSQL DB)  |
 
 ---
 
@@ -38,57 +38,38 @@ This pipeline runs automatically once a day to efficiently calculate the public 
 
 
 1.  **Trigger (Cloud Scheduler):** ⏰ A scheduled job kicks off the process once every 24 hours.
-2.  **Data Service (Scala on Cloud Run):** ⚙️ The Scala microservice wakes up and fetches **only the single latest daily price** for the target asset ('VT') from the **Alpha Vantage API**.
-3.  **Data Update (Firestore):** 💾 The service reads a document containing the last ~13 months of historical prices from Firestore, adds the new price, and removes the oldest one.
-4.  **Calculation:** 💡 Using this complete historical dataset, the Scala service performs the 12-month return calculation to determine the GEM signal ('VT' or 'BND').
-5.  **Result Storage (Firestore):** ✅ The final, simple result (e.g., `{"signal": "VT", "return": 0.1816}`) is written to a public document in Firestore.
+2.  **Data Service (Scala on Cloud Run):** ⚙️ The Scala microservice wakes up and fetches **only the single latest daily price** for the target assets ('IWDA.L', 'CBU0.L', 'EIMI.L', 'IB01.L') from the **Alpha Vantage API**.
+3.  **Data Update (Firestore):** 💾 The service adds the new price to historical data base in FireStore
+4.  **Calculation:** 💡 Using this complete historical dataset, the Scala service performs the 12-month return calculation to determine the GEM signal ('RISK-ON' - (ETFs on global markets : 'IWDA.L' or 'EIMI.L') or 'RISK-OFF - (Bonds: 'CBU0.L' or 'IB01.L')).
+5.  **Result Storage (Firestore):** ✅ The final result is written to a public document in Firestore.
 
-### 2. Synchronous User Portfolio Calculation
+### 2. User Portfolio Calculation (Synchronous)
 
-This flow happens instantly whenever a logged-in user views their dashboard.
+This flow describes two separate, synchronous API calls a logged-in user's browser makes to the Python backend to populate their portfolio dashboard.
 
-1.  **Initial Load (React Frontend):** 💻 The user's browser loads the portfolio dashboard. It reads the raw transaction list (e.g., `date`, `amount`, `asset`) directly from a secure **Firestore** collection.
-2.  **Secure API Call (React -> Python API):** 🔐 The frontend gets a secure ID Token from Firebase Auth and sends the raw transaction list to the **Python API** on Cloud Run.
-3.  **Live Price Fetching (Python API):** 🐍 The Python API receives the request, validates the user's token, and uses the `yfinance` library to fetch the **current market price** for all assets in the user's portfolio.
-4.  **Calculation:** 🧠 The API calculates the current value and profit/loss for each transaction.
-5.  **Response & Display:** ✅ The API sends the enriched data back to the React frontend, which then updates the state and displays the final, calculated values to the user.
+#### Flow A: Current Portfolio Value (Endpoint: `/api/calculate-portfolio`)
+
+This flow happens when the user loads their dashboard to see the *current* value and profit/loss of their individual investments.
+
+1.  **Initial Load (React Frontend):** 💻 The user's browser loads the portfolio dashboard. It's assumed to read the user's raw transaction list (e.g., `date`, `amount`, `asset`) from a secure Firestore collection.
+2.  **Secure API Call (React -> Python API):** 🔐 The frontend gets a secure ID Token from Firebase Auth and sends the *raw transaction list* in the request body to the **Python (FastAPI) API**'s `/api/calculate-portfolio` endpoint.
+3.  **Authentication & Data Fetching (Python API):** 🐍 The API validates the user's Firebase token. It then performs two distinct data-fetching operations from Firestore:
+    * **Current Prices:** It fetches the *most recent price* for all unique assets in the user's portfolio from the `public` collection (e.g., `db.collection("public").document("IWDA.L")`). This data is assumed to be pre-calculated and kept up-to-date by a separate service.
+    * **Historical (Purchase) Prices:** For *each* transaction, the API calls the `_get_price_on_or_after` helper function. This function queries the `historicalData` collection (e.g., `historicalData/IWDA.L/years/2023/months/05`) to find the price on the *actual* date of the transaction. It includes logic to look forward up to 7 days to find the next available trading day if the purchase date was a weekend or holiday.
+4.  **Calculation:** 🧠 Using the *purchase price* from `historicalData` and the *current price* from `public`, the API calculates the `currentValue` and `profitLoss` for each individual transaction.
+5.  **Response & Display:** ✅ The API sends the *enriched* list of transactions (now with `currentValue` and `profitLoss` fields) back to the React frontend, which displays the final, calculated values in the user's dashboard.
 
 ---
 
-## 🏁 Getting Started
+#### Flow B: Historical Portfolio Performance (Endpoint: `/api/portfolio-history`)
 
-To run this project locally, you will need to set up both the frontend and the backend environments.
+This flow happens when the user's dashboard needs to render the *historical performance chart*, showing the portfolio's value over time.
 
-### Prerequisites
-
-* Node.js and npm
-* Python 3.10+ and pip
-* Scala and SBT
-* A Firebase project with Authentication and Firestore enabled.
-
-### Setup Instructions
-
-1.  **Clone the repository:**
-    ```bash
-    git clone <your-repo-url>
-    ```
-
-2.  **Frontend Setup (`gem-frontend-vite`):**
-    * Navigate to the frontend directory.
-    * Create a `.env` file and populate it with your Firebase project keys (use `.env.example` as a template).
-    * Install dependencies: `npm install`
-    * Run the development server: `npm run dev`
-
-3.  **Backend Setup (`GEMwebAPP` & `scala-data-service`):**
-    * Place your Firebase `serviceAccountKey.json` in both the Python and Scala project root directories.
-    * **Python API:**
-        * Navigate to the `GEMwebAPP` directory.
-        * Create and activate a virtual environment: `python -m venv venv` and `.\venv\Scripts\activate`
-        * Install dependencies: `pip install -r requirements.txt`
-        * Run the server: `uvicorn main:app --reload`
-    * **Scala Service:**
-        * Navigate to the `scala-data-service` directory.
-        * Add your Alpha Vantage API key to `DataFetcher.scala`.
-        * Run the one-time backfill: `sbt "run backfill"`
-        * Run a daily update manually: `sbt run`
-
+1.  **Secure API Call (React -> Python API):** 🔐 The frontend sends the *exact same* raw transaction list along with the Firebase ID Token to the `/api/portfolio-history` endpoint.
+2.  **Authentication & Bulk Data Fetch (Python API):** 🐍 The API validates the token. It determines the earliest transaction date and all unique assets. It then calls `_get_all_historical_prices` to perform an *efficient bulk fetch* of all daily prices for all assets from that start date to the present. This minimizes Firestore reads by fetching entire month-documents (e.g., `.../months/05`, `.../months/06`, etc.) at once.
+3.  **Data Processing & Share Calculation:** 📊 The API uses `pandas` to combine all fetched monthly data into a single time series for each asset. It **forward-fills** any missing dates (weekends/holidays) to ensure there is a price for every single day. Using this complete price history, it calculates the number of *shares* purchased in each transaction.
+4.  **Daily History Generation:** 🗓️ The API iterates day-by-day from the user's first transaction to today. On each day, it:
+    * Calculates the total `totalInvested` by summing up transactions up to that date.
+    * Calculates the total `portfolioValue` by multiplying the *total held shares* of each asset by that specific *day's historical price*.
+    * Calculates the `cumulativeProfit` (`portfolioValue - totalInvested`).
+5.  **Response & Display:** ✅ The API returns a large array of daily data points (e.g., `[{date, portfolioValue, totalInvested, cumulativeProfit}, ...]`), which the React frontend uses to render the historical performance chart.
