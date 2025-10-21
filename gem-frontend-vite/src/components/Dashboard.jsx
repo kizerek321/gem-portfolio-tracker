@@ -183,9 +183,12 @@ export const Dashboard = ({ user }) => {
         <div className="p-6">
             <h3 className="text-xl font-bold text-white">Your Transactions</h3>
         </div>
-        <div className="overflow-x-auto">
+        
+        {/* --- Desktop Table (Hidden on mobile) --- */}
+        <div className="overflow-x-auto hidden lg:block">
           {loading ? <p className="p-6 text-center text-gray-400">Loading portfolio...</p> : (
             <table className="min-w-full divide-y divide-gray-700">
+              {/* ... (your existing <thead>) ... */}
               <thead className="bg-gray-900/50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Date</th>
@@ -221,8 +224,55 @@ export const Dashboard = ({ user }) => {
               </tbody>
             </table>
           )}
-          {(!loading && portfolio.length === 0) && <p className="text-center text-gray-500 p-8">Your portfolio is empty. Add your first transaction!</p>}
         </div>
+
+        {/* --- Mobile Card List (Hidden on desktop) --- */}
+        <div className="lg:hidden p-4 space-y-4">
+          {loading ? <p className="p-6 text-center text-gray-400">Loading portfolio...</p> : (
+            enrichedPortfolio.map(tx => {
+              const profitLoss = parseFloat(tx.profitLoss) || 0;
+              const isProfit = profitLoss >= 0;
+              const plColorClass = isProfit ? 'bg-green-500/10 text-brand-green' : 'bg-red-500/10 text-brand-red';
+              const currentValue = parseFloat(tx.currentValue) || 0;
+
+              return (
+                <div key={tx.id} className="bg-gray-700/50 rounded-lg p-4 shadow-md border border-gray-600">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="font-mono text-xl font-bold text-white">{tx.asset}</span>
+                    <span className="text-sm text-gray-400">{tx.date}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Invested:</span>
+                      <span className="font-medium text-gray-300">${Number(tx.amount).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Current Value:</span>
+                      <span className="font-semibold text-white">
+                        {calculating ? '...' : `$${currentValue.toFixed(2)}`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm pt-2 border-t border-gray-600/50">
+                      <span className="text-gray-400">Profit/Loss:</span>
+                      {calculating ? (
+                        <span className="text-sm text-gray-400">...</span>
+                      ) : (
+                        <span className={`px-3 py-1 rounded-full font-semibold text-xs ${plColorClass}`}>
+                          {isProfit ? '+' : ''}${(profitLoss).toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* --- Empty Portfolio Message --- */}
+        {(!loading && portfolio.length === 0) && (
+          <p className="text-center text-gray-500 p-8">Your portfolio is empty. Add your first transaction!</p>
+        )}
       </div>
 
       {/* --- Add Transaction Modal --- */}

@@ -15,7 +15,11 @@ import AboutStrategy from './components/AboutStrategy.jsx';
 import AboutAuthor from './components/AboutAuthor.jsx';
 import PublicSignalView from './components/PublicSignalView.jsx';
 
-
+const MenuIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+  </svg>
+);
 
 const LoadingScreen = ({ message }) => (
   <div className="bg-gray-900 min-h-screen flex flex-col items-center justify-center text-gray-400">
@@ -31,6 +35,7 @@ function App() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -41,7 +46,10 @@ function App() {
   }, []);
   
   const handleLogout = () => {
-    signOut(auth).then(() => navigate('/'));
+    signOut(auth).then(() => {
+        setIsSidebarOpen(false);
+        navigate('/');
+    });
   };
 
   if (authLoading) {
@@ -53,8 +61,14 @@ function App() {
       {user ? (
         // --- AUTHENTICATED LAYOUT ---
         <div className="flex">
-          <Sidebar onLogout={handleLogout} />
+          <Sidebar onLogout={handleLogout} isOpen={isSidebarOpen}    setIsOpen={setIsSidebarOpen}/>
           <main className="flex-1 p-4 sm:p-6 lg:p-8 max-h-screen overflow-y-auto">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 mb-4 bg-gray-700 rounded-md text-gray-300 hover:text-white"
+            >
+              <MenuIcon />
+            </button>
             <Routes>
               <Route path="/dashboard" element={<Dashboard user={user} />} />
               <Route path="/about-strategy" element={<AboutStrategy />} />
