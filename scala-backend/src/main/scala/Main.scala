@@ -9,7 +9,6 @@ import scala.jdk.CollectionConverters._
 object Main extends App {
 
   private def getSecret(secretId: String, versionId: String = "latest"): String = {
-    // IMPORTANT: Replace this with your actual GCP Project ID
     val projectId = "gem-portfolio-tracker"
     // The client will automatically use the application's default credentials
     val client = SecretManagerServiceClient.create()
@@ -211,12 +210,12 @@ object Main extends App {
       .collection("years").document(testYear)
       .collection("months").document(testMonth)
 
-    // 1. Simulate a daily update to add a new price to the same month
+    // 2. Simulate a daily update to add a new price to the same month
     println(s"--- Simulating daily update for a new price on 2025-10-03 ---")
     val newDate = "2025-01-05"
     val newPrice = "102.75"
 
-    // 2.This logic mimics runDailyUpdate, using `update` for an existing doc
+    // 3.This logic mimics runDailyUpdate, using `update` for an existing doc
     val updateData: Map[String, Any] = Map(
       s"prices.$newDate" -> newPrice,
       "updatedAt" -> Timestamp.now()
@@ -224,7 +223,7 @@ object Main extends App {
     monthDocRef.update(updateData.asJava).get()
     println(s"Successfully updated price for $ticker on $newDate using 'update'.")
 
-    // 3. Verify the final data
+    // 4. Verify the final data
     println("--- Verifying final data ---")
     val finalDoc = monthDocRef.get().get()
     if (finalDoc.exists()) {

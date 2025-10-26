@@ -90,7 +90,7 @@ const PublicSignalView = () => {
                 <MetricCard 
                     title="Signal Checked On"
                     value={new Date(signalData.signal_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                    subValue="Signals are checked monthly"
+                    subValue="Signals are checked daily"
                 />
                  <MetricCard 
                     title="Current Price"

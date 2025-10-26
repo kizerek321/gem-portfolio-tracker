@@ -19,7 +19,6 @@ def _get_price_on_or_after(db, asset: str, date_str: str):
         month = check_date.strftime('%m')
 
         try:
-            # Construct the new, more specific path to the monthly document
             month_doc_ref = db.collection("historicalData").document(asset).collection("years").document(year).collection("months").document(month)
             month_doc = month_doc_ref.get()
 
@@ -40,7 +39,6 @@ def calculate_portfolio_performance(db, transactions: list):
     """
     Calculates the current value and profit/loss for a list of transactions
     using data from Firestore.
-    (This function does not need to change as it uses the updated helper function)
     """
     try:
         all_tickers = list(set([tx['asset'] for tx in transactions]))
@@ -102,9 +100,8 @@ def is_market_open_on_date(db, asset: str, date_str: str):
     try:
         date_obj = datetime.strptime(date_str, '%Y-%m-%d')
         year = date_obj.strftime('%Y')
-        month = date_obj.strftime('%m') # Format month with leading zero
+        month = date_obj.strftime('%m')
 
-        # Construct the path to the specific month document
         month_doc_ref = db.collection("historicalData").document(asset).collection("years").document(year).collection("months").document(month)
         month_doc = month_doc_ref.get()
 
@@ -122,7 +119,6 @@ def is_market_open_on_date(db, asset: str, date_str: str):
 def _get_all_historical_prices(db, tickers: list, start_date: datetime):
     """
     Fetches all historical daily prices for a list of tickers from a start date until today.
-    This is much more efficient than fetching prices one by one.
     """
     all_prices = {ticker: {} for ticker in tickers}
     end_date = datetime.now()
@@ -176,7 +172,7 @@ def generate_portfolio_history(db, transactions: list):
     end_date = datetime.now()
     unique_tickers = list(set([tx['asset'] for tx in transactions]))
 
-    # 3. Get ALL historical data in one go (very efficient)
+    # 3. Get ALL historical data in one go
     historical_prices = _get_all_historical_prices(db, unique_tickers, start_date)
 
     # 4. Calculate shares for each transaction

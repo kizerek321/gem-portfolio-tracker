@@ -1,20 +1,20 @@
+import os
+#---firebase imports---
 import firebase_admin
-from firebase_admin import credentials, auth, firestore
-
+from firebase_admin import auth, firestore
+#---fastapi imports---
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-
-from typing import List
-import os
-
-import redis.asyncio as redis
 from fastapi_limiter import FastAPILimiter
 from fastapi_limiter.depends import RateLimiter
-
+#---other imports---
+from pydantic import BaseModel
+from typing import List
 from contextlib import asynccontextmanager
-# Import the refactored functions and the assets list
+#---redis imports---
+import redis.asyncio as redis
+#---gemLogic imports---
 from gemLogic import calculate_portfolio_performance, is_market_open_on_date, assets, generate_portfolio_history
 
 try:
@@ -27,12 +27,10 @@ except Exception as e:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Get Redis URL from environment variable, with a fallback for local dev
     redis_url = os.environ.get("REDIS_URL", "redis://localhost")
 
     print(f"Connecting to Redis at: {redis_url}")
     redis_instance = redis.from_url(redis_url)
-
     # Init Rate Limiter
     await FastAPILimiter.init(redis_instance)
     print("FastAPILimiter initialized.")
@@ -45,7 +43,6 @@ allowed_origins_str = os.environ.get(
     "https://gem-portfolio-tracker.web.app, http://localhost:5173"
 )
 
-# Split the comma-separated string into a list
 origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 
 app.add_middleware(
@@ -85,7 +82,6 @@ def get_current_user(cred: HTTPAuthorizationCredentials = Depends(token_auth_sch
         raise HTTPException(status_code=401, detail="Invalid authentication credentials.")
 
 # --- API Endpoints ---
-
 @app.get("/")
 async def read_root():
     return {"message": "Welcome to the GEM Strategy API"}
@@ -117,10 +113,9 @@ async def read_precalculated_gem_signal():
             raise HTTPException(status_code=404, detail="No signal data found. Please run the Scala data service.")
 
         # 2. Find the asset with the highest 12-month return
-        # Your Scala app stores return_12m as a string, so we cast to float
         best_signal = max(all_signals, key=lambda s: float(s.get("return_12m", -999)))
 
-        # 3. Format the data from the winning asset to match the frontend's expectation
+        # 3. Format the data from the winning asset
         formatted_data = {
             "recommended_asset": best_signal.get("signal"),
             "signal_date": best_signal.get("calculationDate"),
@@ -131,7 +126,7 @@ async def read_precalculated_gem_signal():
                 "past_price": best_signal.get("past_price", "N/A"),
             },
             "signal": best_signal.get("signal"),
-            "risk_on_asset": best_signal.get("signal"), # The winning asset is the risk-on asset
+            "risk_on_asset": best_signal.get("signal"),
         }
         return formatted_data
 
