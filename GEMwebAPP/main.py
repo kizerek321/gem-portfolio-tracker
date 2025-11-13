@@ -3,7 +3,7 @@ import os
 import firebase_admin
 from firebase_admin import auth, firestore
 #---fastapi imports---
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_limiter import FastAPILimiter
@@ -12,6 +12,7 @@ from fastapi_limiter.depends import RateLimiter
 from pydantic import BaseModel
 from typing import List
 from contextlib import asynccontextmanager
+import json
 #---redis imports---
 import redis.asyncio as redis
 #---gemLogic imports---
@@ -31,7 +32,7 @@ async def lifespan(app: FastAPI):
 
     print(f"Connecting to Redis at: {redis_url}")
     redis_instance = redis.from_url(redis_url)
-    # Init Rate Limiter
+    app.state.redis = redis_instance
     await FastAPILimiter.init(redis_instance)
     print("FastAPILimiter initialized.")
     yield
@@ -81,6 +82,10 @@ def get_current_user(cred: HTTPAuthorizationCredentials = Depends(token_auth_sch
         print(f"!!! FIREBASE AUTHENTICATION ERROR: {e}")
         raise HTTPException(status_code=401, detail="Invalid authentication credentials.")
 
+async def get_redis(request: Request) -> redis.Redis:
+    """Dependency to get the Redis client."""
+    return request.app.state.redis
+
 # --- API Endpoints ---
 @app.get("/")
 async def read_root():
@@ -94,12 +99,26 @@ async def validate_market_date(request: DateValidationRequest):
     is_open = is_market_open_on_date(db, request.asset, request.date)
     return {"isValid": is_open}
 
+
 @app.get("/api/gem-signal", dependencies=[Depends(RateLimiter(times=15, seconds=60))])
-async def read_precalculated_gem_signal():
+async def read_precalculated_gem_signal(redis_client: redis.Redis = Depends(get_redis)):
     """
     Reads pre-calculated signals for all assets from Firestore, determines the
     asset with the highest momentum, and returns its data.
     """
+    cache_key = "gem-signal:current"
+    cache_ttl_seconds = 7200
+    try:
+        # 1. Try to get from cache
+        cached_data = await redis_client.get(cache_key)
+        if cached_data:
+            print("CACHE HIT: Returning signal from Redis.")
+            return json.loads(cached_data)
+
+    except Exception as e:
+        # If Redis fails, we log it and just fetch from source.
+        print(f"Warning: Redis GET failed. Fetching from source. Error: {e}")
+
     try:
         all_signals = []
         # 1. Fetch the signal document for every asset
@@ -128,6 +147,13 @@ async def read_precalculated_gem_signal():
             "signal": best_signal.get("signal"),
             "risk_on_asset": best_signal.get("signal"),
         }
+        #4. SET the result in the cache before returning
+        try:
+            await redis_client.set(cache_key, json.dumps(formatted_data), ex=cache_ttl_seconds)
+            print("CACHE SET: Saved new signal to Redis.")
+        except Exception as e:
+            print(f"Warning: Redis SET failed. Error: {e}")
+
         return formatted_data
 
     except Exception as e:
