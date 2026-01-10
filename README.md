@@ -1,4 +1,7 @@
 # 🚀 GEM Portfolio Tracker
+<img width="1858" height="901" alt="image" src="https://github.com/user-attachments/assets/f6a972c2-1f9c-4752-b9d1-9d3c05c97591" />
+<img width="1852" height="909" alt="image" src="https://github.com/user-attachments/assets/d75ff4ee-87bf-4890-9b45-14a8854771ec" />
+
 https://gem-portfolio-tracker.web.app
 
 A full-stack, polyglot web application designed to provide investment signals based on the **Global Equity Momentum (GEM)** strategy. This project was built to practice and demonstrate advanced skills in multi-language backend development, cloud deployment, and data pipeline logic.
