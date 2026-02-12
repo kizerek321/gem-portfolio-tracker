@@ -1,43 +1,37 @@
 import os
-#---firebase imports---
+import base64
 import firebase_admin
 from firebase_admin import auth, firestore
-#---fastapi imports---
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi_limiter import FastAPILimiter
-from fastapi_limiter.depends import RateLimiter
-#---other imports---
 from pydantic import BaseModel
 from typing import List
 from contextlib import asynccontextmanager
 import json
-#---redis imports---
-import redis.asyncio as redis
-#---gemLogic imports---
 from gemLogic import calculate_portfolio_performance, is_market_open_on_date, assets, generate_portfolio_history
 
 try:
-    firebase_admin.initialize_app()
+    firebase_creds_b64 = os.environ.get("FIREBASE_CREDENTIALS_BASE64")
+
+    if firebase_creds_b64:
+        creds_json = base64.b64decode(firebase_creds_b64).decode("utf-8")
+        creds_dict = json.loads(creds_json)
+        
+        cred = credentials.Certificate(creds_dict)
+        
+        firebase_admin.initialize_app(cred)
+        print("Firebase Admin SDK initialized using Environment Variable credentials.")
+        
+    else:
+        firebase_admin.initialize_app()
+        print("Firebase Admin SDK initialized using Default Credentials.")
+
     db = firestore.client()
-    print("Firebase Admin SDK initialized successfully using application default credentials.")
+
 except Exception as e:
     print(f"!!! CRITICAL: Failed to initialize Firebase Admin SDK: {e}")
     raise e
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost")
-
-    print(f"Connecting to Redis at: {redis_url}")
-    redis_instance = redis.from_url(redis_url)
-    app.state.redis = redis_instance
-    await FastAPILimiter.init(redis_instance)
-    print("FastAPILimiter initialized.")
-    yield
-
-app = FastAPI(lifespan=lifespan)
 
 allowed_origins_str = os.environ.get(
     "CORS_ALLOWED_ORIGINS",
@@ -54,7 +48,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Pydantic Models ---
 class DateValidationRequest(BaseModel):
     asset: str
     date: str
@@ -82,16 +75,12 @@ def get_current_user(cred: HTTPAuthorizationCredentials = Depends(token_auth_sch
         print(f"!!! FIREBASE AUTHENTICATION ERROR: {e}")
         raise HTTPException(status_code=401, detail="Invalid authentication credentials.")
 
-async def get_redis(request: Request) -> redis.Redis:
-    """Dependency to get the Redis client."""
-    return request.app.state.redis
-
 # --- API Endpoints ---
 @app.get("/")
 async def read_root():
     return {"message": "Welcome to the GEM Strategy API"}
 
-@app.post("/api/validate-date", dependencies=[Depends(RateLimiter(times=30, seconds=60))])
+@app.post("/api/validate-date")
 async def validate_market_date(request: DateValidationRequest):
     """
     Checks if a price exists for the given asset on the provided date in Firestore.
@@ -100,28 +89,14 @@ async def validate_market_date(request: DateValidationRequest):
     return {"isValid": is_open}
 
 
-@app.get("/api/gem-signal", dependencies=[Depends(RateLimiter(times=15, seconds=60))])
-async def read_precalculated_gem_signal(redis_client: redis.Redis = Depends(get_redis)):
+@app.get("/api/gem-signal")
+async def read_precalculated_gem_signal():
     """
     Reads pre-calculated signals for all assets from Firestore, determines the
     asset with the highest momentum, and returns its data.
     """
-    cache_key = "gem-signal:current"
-    cache_ttl_seconds = 7200
-    try:
-        # 1. Try to get from cache
-        cached_data = await redis_client.get(cache_key)
-        if cached_data:
-            print("CACHE HIT: Returning signal from Redis.")
-            return json.loads(cached_data)
-
-    except Exception as e:
-        # If Redis fails, we log it and just fetch from source.
-        print(f"Warning: Redis GET failed. Fetching from source. Error: {e}")
-
     try:
         all_signals = []
-        # 1. Fetch the signal document for every asset
         for ticker in assets:
             signal_ref = db.collection("public").document(ticker)
             signal_doc = signal_ref.get()
@@ -131,10 +106,8 @@ async def read_precalculated_gem_signal(redis_client: redis.Redis = Depends(get_
         if not all_signals:
             raise HTTPException(status_code=404, detail="No signal data found. Please run the Scala data service.")
 
-        # 2. Find the asset with the highest 12-month return
         best_signal = max(all_signals, key=lambda s: float(s.get("return_12m", -999)))
 
-        # 3. Format the data from the winning asset
         formatted_data = {
             "recommended_asset": best_signal.get("signal"),
             "signal_date": best_signal.get("calculationDate"),
@@ -147,20 +120,13 @@ async def read_precalculated_gem_signal(redis_client: redis.Redis = Depends(get_
             "signal": best_signal.get("signal"),
             "risk_on_asset": best_signal.get("signal"),
         }
-        #4. SET the result in the cache before returning
-        try:
-            await redis_client.set(cache_key, json.dumps(formatted_data), ex=cache_ttl_seconds)
-            print("CACHE SET: Saved new signal to Redis.")
-        except Exception as e:
-            print(f"Warning: Redis SET failed. Error: {e}")
-
         return formatted_data
 
     except Exception as e:
         print(f"Error processing signals from Firestore: {e}")
         raise HTTPException(status_code=500, detail="Could not process GEM signal from the database.")
 
-@app.post("/api/calculate-portfolio",dependencies=[Depends(RateLimiter(times=5, minutes=1))])
+@app.post("/api/calculate-portfolio")
 async def calculate_portfolio(transactions: List[Transaction], user=Depends(get_current_user)):
     """
     Protected endpoint. Calculates portfolio performance using data from Firestore.
@@ -170,7 +136,7 @@ async def calculate_portfolio(transactions: List[Transaction], user=Depends(get_
     # Pass the db instance to the calculation function
     return calculate_portfolio_performance(db, transaction_list)
 
-@app.post("/api/portfolio-history",dependencies=[Depends(RateLimiter(times=3, minutes=1))])
+@app.post("/api/portfolio-history")
 async def calculate_portfolio_history(transactions: List[Transaction], user=Depends(get_current_user)):
     """
     Protected endpoint. Generates a day-by-day history of the portfolio's value and profit.
