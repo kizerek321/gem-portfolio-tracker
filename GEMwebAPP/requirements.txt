@@ -10,7 +10,7 @@ pydantic
 
 # Redis for caching and rate limiting
 redis
-fastapi-limiter
+fastapi-limiter==0.1.6
 fastapi-cache2
 
 # Pandas for data manipulation in gemLogic.py
