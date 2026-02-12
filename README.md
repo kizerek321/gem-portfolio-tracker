@@ -4,7 +4,7 @@
 
 https://gem-portfolio-tracker.web.app
 
-A full-stack, polyglot web application designed to provide investment signals based on the **Global Equity Momentum (GEM)** strategy. This project was built to practice and demonstrate advanced skills in multi-language backend development, cloud deployment, and data pipeline logic.
+A full-stack web application designed to provide investment signals based on the **Global Equity Momentum (GEM)** strategy. This project was built to practice and demonstrate advanced skills in multi-language backend development, cloud deployment, and data pipeline logic.
 
 ---
 
