@@ -1,7 +1,7 @@
 import os
 import base64
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import auth, firestore, credentials
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
