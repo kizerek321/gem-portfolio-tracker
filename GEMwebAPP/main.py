@@ -11,6 +11,9 @@ from contextlib import asynccontextmanager
 import json
 from gemLogic import calculate_portfolio_performance, is_market_open_on_date, assets, generate_portfolio_history
 
+print("--- DEBUG: LIST OF ENV VARS ---")
+print(os.environ.keys())
+
 try:
     firebase_creds_b64 = os.environ.get("FIREBASE_CREDENTIALS_BASE64")
 
