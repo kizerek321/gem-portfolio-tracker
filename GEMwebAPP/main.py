@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 import json
 from gemLogic import calculate_portfolio_performance, is_market_open_on_date, assets, generate_portfolio_history
 
-print("--- DEBUG: LIST OF ENV VARS ---")
+print("--- DEBUG: LIST OF ENV VAR+S ---")
 print(os.environ.keys())
 
 try:
@@ -35,6 +35,8 @@ try:
 except Exception as e:
     print(f"!!! CRITICAL: Failed to initialize Firebase Admin SDK: {e}")
     raise e
+
+app = FastAPI()
 
 allowed_origins_str = os.environ.get(
     "CORS_ALLOWED_ORIGINS",
