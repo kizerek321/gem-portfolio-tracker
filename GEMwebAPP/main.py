@@ -14,35 +14,32 @@ from pydantic import BaseModel
 from gemLogic import calculate_portfolio_performance, is_market_open_on_date, assets, generate_portfolio_history
 
 
-try:
-    firebase_creds_b64 = os.environ.get("FIREBASE_CREDENTIALS_BASE64")
+def initialize_firebase():
+    """Initializes Firebase Admin SDK from Env Var or Local File."""
+    try:
+        firebase_creds_b64 = os.environ.get("FIREBASE_CREDENTIALS_BASE64")
+        if firebase_creds_b64:
+            creds_json = base64.b64decode(firebase_creds_b64).decode("utf-8")
+            creds_dict = json.loads(creds_json)
+            cred = credentials.Certificate(creds_dict)
+            firebase_admin.initialize_app(cred)
+            print("Firebase: Initialized from Environment Variable.")
+        else:
+            firebase_admin.initialize_app()
+            print("Firebase: Initialized from Default Credentials.")
+    except Exception as e:
+        print(f"CRITICAL: Firebase initialization failed: {e}")
+        pass
 
-    if firebase_creds_b64:
-        print("WE ARE HERE!!!!!")
+initialize_firebase()
+db = firestore.client()
 
-        creds_json = base64.b64decode(firebase_creds_b64).decode("utf-8")
-        creds_dict = json.loads(creds_json)
-        
-        cred = credentials.Certificate(creds_dict)
-        
-        firebase_admin.initialize_app(cred)
-        print("Firebase Admin SDK initialized using Environment Variable credentials.")
-        
-    else:
-        firebase_admin.initialize_app()
-        print("Firebase Admin SDK initialized using Default Credentials.")
-
-    db = firestore.client()
-
-except Exception as e:
-    print(f"!!! CRITICAL: Failed to initialize Firebase Admin SDK: {e}")
-    raise e
-
-app = FastAPI()
+app = FastAPI(title="GEM Strategy API")
 
 allowed_origins_str = os.environ.get(
     "CORS_ALLOWED_ORIGINS",
-    "https://gem-portfolio-tracker.web.app, http://localhost:5173"
+    "https://gem-portfolio-tracker.web.app,"
+    "http://localhost:5173"
 )
 
 origins = [origin.strip() for origin in allowed_origins_str.split(",")]
