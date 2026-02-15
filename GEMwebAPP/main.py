@@ -1,23 +1,25 @@
 import os
 import base64
+import json
+from typing import List
+
 import firebase_admin
-from firebase_admin import auth, firestore, credentials
-from fastapi import FastAPI, Depends, HTTPException, Request
+from firebase_admin import credentials
+from firebase_admin import firestore
+from firebase_admin import auth
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
-from contextlib import asynccontextmanager
-import json
 from gemLogic import calculate_portfolio_performance, is_market_open_on_date, assets, generate_portfolio_history
 
-print("--- DEBUG: LIST OF ENV VAR+S ---")
-print(os.environ.keys())
 
 try:
     firebase_creds_b64 = os.environ.get("FIREBASE_CREDENTIALS_BASE64")
 
     if firebase_creds_b64:
+        print("WE ARE HERE!!!!!")
+
         creds_json = base64.b64decode(firebase_creds_b64).decode("utf-8")
         creds_dict = json.loads(creds_json)
         
