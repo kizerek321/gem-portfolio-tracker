@@ -54,7 +54,7 @@ export const Dashboard = ({ user }) => {
       setCalculating(true);
       try {
         const token = await user.getIdToken();
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/calculate-portfolio`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/calculate-portfolio`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify(portfolio)
@@ -83,7 +83,7 @@ export const Dashboard = ({ user }) => {
       setChartError(null);   
       try {
         const token = await user.getIdToken();
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/portfolio-history`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/portfolio-history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify(portfolio)

@@ -38,7 +38,7 @@ const PublicSignalView = () => {
         const fetchSignal = async () => {
             try {
                 // Fetch data from your backend API
-                const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/gem-signal`);
+                const response = await fetch(`${import.meta.env.VITE_API_URL}/gem-signal`);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }

@@ -7,7 +7,7 @@ class dataFetcher(apiKey: String, ticker: String) {
   private val backend = HttpClientSyncBackend()
 
   def fetchFullHistory(): Either[ResponseException[String, io.circe.Error], AlphaVantageResponse] = {
-    val fullHistoryUri = uri"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=$ticker&outputsize=full&apikey=$apiKey"
+    val fullHistoryUri = uri"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=$ticker&outputsize=compact&apikey=$apiKey"
     val request = basicRequest.get(fullHistoryUri).response(asJson[AlphaVantageResponse])
     val response = request.send(backend)
     response.body

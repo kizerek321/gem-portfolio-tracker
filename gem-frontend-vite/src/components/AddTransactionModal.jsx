@@ -16,7 +16,7 @@ const AddTransactionModal = ({ isOpen, onClose, onSubmit, user }) => {
       setValidationMessage('');
       setIsDateValid(false);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/validate-date`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/validate-date`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ asset, date })

@@ -3,7 +3,7 @@ config.properties
 
 # Google Cloud credentials
 serviceAccountKey.json
-
+firebasekey.json
 # Scala build artifacts
 /project/project/
 /project/target/

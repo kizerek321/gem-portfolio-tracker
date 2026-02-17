@@ -7,7 +7,6 @@ def _get_price_on_or_after(db, asset: str, date_str: str):
     """
     Helper function to get the price for an asset on a specific date from Firestore.
     If the date is not a trading day, it checks the next few days.
-    This version is updated for the new /years/{year}/months/{month} structure.
     """
     current_date = datetime.strptime(date_str, '%Y-%m-%d')
     # Look ahead up to 7 days to find the next trading day
@@ -15,7 +14,6 @@ def _get_price_on_or_after(db, asset: str, date_str: str):
         check_date = current_date + timedelta(days=i)
         check_date_str = check_date.strftime('%Y-%m-%d')
         year = check_date.strftime('%Y')
-        # Format month with leading zero (e.g., "01", "09", "12")
         month = check_date.strftime('%m')
 
         try:
@@ -25,13 +23,11 @@ def _get_price_on_or_after(db, asset: str, date_str: str):
             if month_doc.exists:
                 prices = month_doc.to_dict().get("prices", {})
                 if check_date_str in prices:
-                    # Found the price, return it and the actual date
                     return float(prices[check_date_str]), check_date_str
         except Exception as e:
             print(f"Warning: Could not query Firestore for {asset} on {check_date_str}. Error: {e}")
-            continue # Try the next day
+            continue
 
-    # If no price is found after checking a week
     return None, None
 
 
@@ -65,7 +61,7 @@ def calculate_portfolio_performance(db, transactions: list):
                 enriched_transactions.append(tx)
                 continue
 
-            # 2. Get the historical price using our updated helper function
+            # 2. Get the historical price using helper function
             price_on_date, actual_date = _get_price_on_or_after(db, asset, tx['date'])
 
             if price_on_date is None:
@@ -110,11 +106,10 @@ def is_market_open_on_date(db, asset: str, date_str: str):
             # Return True if the date exists as a key in the prices map
             return date_str in prices
         else:
-            # If the month document doesn't exist, the date can't be valid
             return False
     except Exception as e:
         print(f"Error checking market date in Firestore: {e}")
-        return False # Assume closed if any error occurs
+        return False
 
 def _get_all_historical_prices(db, tickers: list, start_date: datetime):
     """

@@ -10,7 +10,6 @@ object Main extends App {
 
   private def getSecret(secretId: String, versionId: String = "latest"): String = {
     val projectId = "gem-portfolio-tracker"
-    // The client will automatically use the application's default credentials
     val client = SecretManagerServiceClient.create()
     try {
       val secretVersionName = SecretVersionName.of(projectId, secretId, versionId)
@@ -23,26 +22,41 @@ object Main extends App {
   
   // --- Configuration Loading ---
   val properties = new Properties()
-  val configPath = "config.properties"
-  val apiKey: String = try {
-    val key = getSecret("alphavantage-api-key-scala")
-    if (key == null || key.trim.isEmpty) {
-      throw new RuntimeException("API key from Secret Manager is missing or empty.")
+  val configPath = "C:\\Users\\kizer\\Documents\\app\\scala-backend\\config.properties"
+  val apiKey: String = {
+    try {
+      val fis = new java.io.FileInputStream(configPath)
+      properties.load(fis)
+      fis.close()
+    } catch {
+      case _: Exception =>
     }
-    println("API key loaded successfully from Secret Manager.")
-    key
-  } catch {
-    case e: Exception =>
-      println(s"CRITICAL: Could not load API key 'alphavantage-api-key' from Google Cloud Secret Manager.")
-      println(e.getMessage)
-      System.exit(1)
-      ""
+    Option(properties.getProperty("alphavantage.apikey")).filter(_.trim.nonEmpty) match {
+      case Some(key) =>
+        println("API key loaded successfully from config.properties.")
+        key
+      case None =>
+        try {
+          val key = getSecret("alphavantage-api-key-scala")
+          if (key == null || key.trim.isEmpty) {
+            throw new RuntimeException("API key from Secret Manager is missing or empty.")
+          }
+          println("API key loaded successfully from Secret Manager.")
+          key
+        } catch {
+          case e: Exception =>
+            println(s"CRITICAL: Could not load API key from config.properties or Google Cloud Secret Manager.")
+            println(e.getMessage)
+            System.exit(1)
+            ""
+        }
+    }
   }
 
   // --- Application Setup ---
-  val assets = List("CBU0.L", "EIMI.L", "IB01.L", "IWDA.L")
+  val assets = List("CBU0.L", "EIMI.L","IB01.L", "IWDA.L")
   val daysToKeep = 280 // Approximately 13 months of trading days
-  val db = FireBaseClient.db // Get the initialized DB instance
+  val db = FireBaseClient.db
 
   // --- Business Logic ---
 
@@ -75,8 +89,6 @@ object Main extends App {
             val docSnapshot = monthDocRef.get().get()
 
             if (!docSnapshot.exists()) {
-              // --- DOCUMENT DOES NOT EXIST: CREATE IT ---
-              // Create the document for the first time this month.
               val newMonthData = Map(
                 "prices" -> Map(latestDate -> latestPrice).asJava,
                 "updatedAt" -> Timestamp.now()
@@ -85,13 +97,12 @@ object Main extends App {
               println(s"Successfully created new price document for $ticker for $latestYear-$latestMonth.")
             }else{
               val updateData: Map[String, Any] = Map(
-                s"prices.$latestDate" -> latestPrice, // e.g., "prices.2025-10-14"
+                s"prices.$latestDate" -> latestPrice,
                 "updatedAt" -> Timestamp.now()
               )
               monthDocRef.update(updateData.asJava).get()
               println(s"Successfully updated price for $ticker on $latestDate.")
             }
-            // Fetch the last ~14 months of data to ensure we have enough for the momentum calculation
             var allPrices: Map[String, String] = Map.empty
             for (i <- 0 to 13) {
               val d = date.minusMonths(i)
@@ -167,7 +178,7 @@ object Main extends App {
                 .collection("years").document(year)
                 .collection("months").document(month)
 
-              val dataToSave = Map("prices" -> prices.asJava, "updatedAt" -> Timestamp.now())
+              val dataToSave: Map[String, Any] = Map("prices" -> prices.asJava, "updatedAt" -> Timestamp.now())
               monthDocRef.set(dataToSave.asJava).get()
               println(s"Successfully backfilled ${prices.size} days of data for $ticker for $year-$month.")
             }
@@ -176,83 +187,10 @@ object Main extends App {
     }
   }
 
-  def test(): Unit ={
-    println("Running test for CBU0.L...")
-    val ticker = "CBU0.L"
-    val year = "2025"
-    val month = "01"
-
-    val testPrices = Map(
-      "2025-01-01" -> "150.00",
-      "2025-01-02" -> "151.25",
-      "2025-01-03" -> "150.75",
-      "2025-01-04" -> "152.10"
-    )
-    val monthDocRef = db.collection("historicalData").document(ticker)
-      .collection("years").document(year)
-      .collection("months").document(month)
-
-    val dataToSave = Map("prices" -> testPrices.asJava, "updatedAt" -> Timestamp.now())
-    monthDocRef.set(dataToSave.asJava).get()
-
-    println(s"Successfully wrote ${testPrices.size} sample data points for $ticker for $year-$month.")
-  }
-
-  def test_signal(): Unit={
-    println("Running Firestore update test...")
-    val ticker = "CBU0.L"
-    val testYear = "2025"
-    val testMonth = "01"
-
-    // 1. Seed initial data for a specific month
-    println(s"--- Seeding initial data for $ticker for $testYear-$testMonth ---")
-    val monthDocRef = db.collection("historicalData").document(ticker)
-      .collection("years").document(testYear)
-      .collection("months").document(testMonth)
-
-    // 2. Simulate a daily update to add a new price to the same month
-    println(s"--- Simulating daily update for a new price on 2025-10-03 ---")
-    val newDate = "2025-01-05"
-    val newPrice = "102.75"
-
-    // 3.This logic mimics runDailyUpdate, using `update` for an existing doc
-    val updateData: Map[String, Any] = Map(
-      s"prices.$newDate" -> newPrice,
-      "updatedAt" -> Timestamp.now()
-    )
-    monthDocRef.update(updateData.asJava).get()
-    println(s"Successfully updated price for $ticker on $newDate using 'update'.")
-
-    // 4. Verify the final data
-    println("--- Verifying final data ---")
-    val finalDoc = monthDocRef.get().get()
-    if (finalDoc.exists()) {
-      val data = finalDoc.toObject(classOf[HistoricalData])
-      if (data != null && data.prices != null) {
-        val finalPrices = data.prices.asScala
-        println(s"Final prices for $testYear-$testMonth: $finalPrices")
-        if (finalPrices.contains(newDate) && finalPrices.contains("2025-01-05")) {
-          println("Verification successful: New price was added and old prices were preserved.")
-        } else {
-          println("Verification FAILED: Data was overwritten or not added correctly.")
-        }
-      } else {
-        println("Verification FAILED: Document format is incorrect after update.")
-      }
-    } else {
-      println("Verification FAILED: Document does not exist after update.")
-    }
-  }
-
   if (args != null && args.contains("backfill")) {
       println("Running backfill...")
       runBackFill()
-  }else if (args != null && args.contains("test_history")){
-      test()
-  } else if ( args != null && args.contains("test_daily")) {
-      test_signal()
   }else {
-      println("Running daily update...")
       runDailyUpdate()
   }
 }
